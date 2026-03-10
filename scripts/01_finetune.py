@@ -150,7 +150,7 @@ def train(config: dict, seed_override: int | None = None):
             print("xformers not available, continuing without it")
 
     # Optimizer
-    optimizer = torch.optim.AdamW(unet.parameters(), lr=config["learning_rate"])
+    optimizer = torch.optim.AdamW(unet.parameters(), lr=float(config["learning_rate"]))
 
     # Dataset
     dataset = TextImageDataset(
