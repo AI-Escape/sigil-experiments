@@ -21,6 +21,7 @@ import pandas as pd
 import torch
 import wandb
 from accelerate import Accelerator
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 from accelerate.utils import ProjectConfiguration, set_seed
 from diffusers import (
     AutoencoderKL,
@@ -192,81 +193,102 @@ def train(config: dict, seed_override: int | None = None):
     print(f"  Effective batch size: {config['train_batch_size'] * config['gradient_accumulation_steps']}")
 
     unet.train()
-    while global_step < max_steps:
-        for batch in dataloader:
-            with accelerator.accumulate(unet):
-                # Encode images to latent space
-                latents = vae.encode(
-                    batch["pixel_values"].to(dtype=torch.float32)
-                ).latent_dist.sample()
-                latents = latents * vae.config.scaling_factor
+    last_loss = 0.0
 
-                # Sample noise
-                noise = torch.randn_like(latents)
-                timesteps = torch.randint(
-                    0, noise_scheduler.config.num_train_timesteps,
-                    (latents.shape[0],), device=latents.device,
-                ).long()
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+        TextColumn("• loss: {task.fields[loss]:.4f}"),
+    ) as progress:
+        task = progress.add_task(
+            f"Training {phase}/{condition}",
+            total=max_steps,
+            loss=0.0,
+        )
 
-                # Add noise to latents
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        while global_step < max_steps:
+            for batch in dataloader:
+                with accelerator.accumulate(unet):
+                    # Encode images to latent space
+                    latents = vae.encode(
+                        batch["pixel_values"].to(dtype=torch.float32)
+                    ).latent_dist.sample()
+                    latents = latents * vae.config.scaling_factor
 
-                # Get text embeddings
-                encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+                    # Sample noise
+                    noise = torch.randn_like(latents)
+                    timesteps = torch.randint(
+                        0, noise_scheduler.config.num_train_timesteps,
+                        (latents.shape[0],), device=latents.device,
+                    ).long()
 
-                # Predict noise
-                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    # Add noise to latents
+                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-                # Loss
-                loss = torch.nn.functional.mse_loss(model_pred.float(), noise.float(), reduction="mean")
+                    # Get text embeddings
+                    encoder_hidden_states = text_encoder(batch["input_ids"])[0]
 
-                accelerator.backward(loss)
+                    # Predict noise
+                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+                    # Loss
+                    loss = torch.nn.functional.mse_loss(model_pred.float(), noise.float(), reduction="mean")
+
+                    accelerator.backward(loss)
+                    if accelerator.sync_gradients:
+                        accelerator.clip_grad_norm_(unet.parameters(), 1.0)
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
+
                 if accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(unet.parameters(), 1.0)
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
+                    global_step += 1
+                    last_loss = loss.detach().item()
+                    progress.update(task, completed=global_step, loss=last_loss)
 
-            if accelerator.sync_gradients:
-                global_step += 1
+                    if global_step % 100 == 0:
+                        accelerator.log({"train_loss": last_loss, "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
 
-                if global_step % 100 == 0:
-                    accelerator.log({"train_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
+                    if global_step % checkpointing_steps == 0:
+                        if accelerator.is_main_process:
+                            save_dir = Path(output_dir) / f"checkpoint-{global_step}"
+                            save_dir.mkdir(parents=True, exist_ok=True)
 
-                if global_step % checkpointing_steps == 0:
-                    if accelerator.is_main_process:
-                        save_dir = Path(output_dir) / f"checkpoint-{global_step}"
-                        save_dir.mkdir(parents=True, exist_ok=True)
+                            # Save pipeline
+                            pipeline = StableDiffusionPipeline.from_pretrained(
+                                config["pretrained_model_name_or_path"],
+                                unet=accelerator.unwrap_model(unet),
+                                vae=vae,
+                                text_encoder=text_encoder,
+                                tokenizer=tokenizer,
+                            )
+                            pipeline.save_pretrained(str(save_dir))
 
-                        # Save pipeline
-                        pipeline = StableDiffusionPipeline.from_pretrained(
-                            config["pretrained_model_name_or_path"],
-                            unet=accelerator.unwrap_model(unet),
-                            vae=vae,
-                            text_encoder=text_encoder,
-                            tokenizer=tokenizer,
-                        )
-                        pipeline.save_pretrained(str(save_dir))
+                            # Save training state
+                            state = {
+                                "global_step": global_step,
+                                "config": config,
+                                "seed": seed,
+                            }
+                            with open(save_dir / "training_state.json", "w") as f:
+                                json.dump(state, f, indent=2)
 
-                        # Save training state
-                        state = {
-                            "global_step": global_step,
-                            "config": config,
-                            "seed": seed,
-                        }
-                        with open(save_dir / "training_state.json", "w") as f:
-                            json.dump(state, f, indent=2)
+                            progress.console.print(f"  [green]Checkpoint saved: step {global_step}[/green]")
 
-                        print(f"  Checkpoint saved: step {global_step}")
+                            # Sync to R2 (non-blocking, best-effort)
+                            try:
+                                push_checkpoint(phase, condition, seed, global_step)
+                            except Exception as e:
+                                progress.console.print(f"  [yellow]R2 sync failed (continuing): {e}[/yellow]")
 
-                        # Sync to R2 (non-blocking, best-effort)
-                        try:
-                            push_checkpoint(phase, condition, seed, global_step)
-                        except Exception as e:
-                            print(f"  R2 sync failed (continuing): {e}")
-
-                if global_step >= max_steps:
-                    break
+                    if global_step >= max_steps:
+                        break
 
     accelerator.end_training()
     print(f"\nTraining complete: {global_step} steps")
