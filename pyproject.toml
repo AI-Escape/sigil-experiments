@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "sigil-experiments"
 version = "0.1.0"
 description = "Sigil ghost signal training survival experiments"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "sigil-watermark>=0.2.0",
     "torch>=2.0",

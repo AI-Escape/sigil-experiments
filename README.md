@@ -39,9 +39,18 @@ pod start phase1
 pod rm phase1
 ```
 
-### 2. Set up secrets on the pod
+### 2. Clone the repo and set up secrets (BEFORE running setup)
 
-SSH into the pod and create `/workspace/.env`:
+SSH into the pod and do these steps **in order** — the setup script needs
+your `.env` to configure rclone, wandb, and HuggingFace:
+
+```bash
+cd /workspace
+git clone https://github.com/AI-Escape/sigil-experiments.git
+cd sigil-experiments
+```
+
+Create `/workspace/.env` with your secrets:
 
 ```bash
 cat > /workspace/.env << 'EOF'
@@ -53,6 +62,12 @@ WANDB_API_KEY=your_wandb_api_key
 HF_TOKEN=your_huggingface_token
 SIGIL_ARTIST_PRIVATE_KEY=your_hex_encoded_private_key
 EOF
+```
+
+Load the env vars:
+
+```bash
+set -a && source /workspace/.env && set +a
 ```
 
 To generate a Sigil keypair for the first time:
@@ -69,15 +84,43 @@ print(f'Public key (safe to share): {keys.public_key.hex()}')
 
 ### 3. Run setup
 
+Now run the setup script — it will use your env vars to configure rclone,
+wandb, HuggingFace, and accelerate:
+
 ```bash
-cd /workspace
-git clone https://github.com/YOUR_USERNAME/sigil-experiments.git
-cd sigil-experiments
 bash scripts/setup_runpod.sh
 source .venv/bin/activate
 ```
 
-### 4. Prepare datasets
+Verify rclone is configured:
+
+```bash
+rclone ls r2:sigil-experiments/ | head
+```
+
+If rclone isn't working, configure it manually:
+
+```bash
+mkdir -p ~/.config/rclone
+cat > ~/.config/rclone/rclone.conf << EOF
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = ${R2_ACCESS_KEY_ID}
+secret_access_key = ${R2_SECRET_ACCESS_KEY}
+endpoint = https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+acl = private
+no_check_bucket = true
+EOF
+```
+
+### 4. Pull datasets from R2
+
+```bash
+rclone sync r2:sigil-experiments/datasets/ data/ --progress
+```
+
+### 5. Prepare datasets (local, before uploading to R2)
 
 Place your artist's original images (PNG/JPG) in a directory, then:
 
@@ -106,7 +149,7 @@ Push datasets to R2 for persistence:
 rclone sync data/ r2:sigil-experiments/datasets/
 ```
 
-### 5. Run experiments
+### 6. Run experiments
 
 #### Phase 0: Baselines (~1 hour)
 
@@ -193,7 +236,7 @@ python scripts/utils/captioning.py --input data/artist_wm/images \
 python scripts/06_phase4_controls.py --phase 4e --artist-name "Artist Name"
 ```
 
-### 6. Sync & shutdown
+### 7. Sync & shutdown
 
 Always sync results to R2 before stopping the pod:
 
