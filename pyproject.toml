@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "sigil-watermark>=0.2.0",
     "torch>=2.0",
+    "torchvision>=0.15.0",
     "diffusers>=0.28.0",
     "transformers>=4.38.0",
     "accelerate>=0.28.0",
