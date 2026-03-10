@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 
 
 # Artist label-to-name mapping from huggan/wikiart features
@@ -62,12 +63,22 @@ def list_artists():
 
     counts = {}
     total = 0
-    for ex in ds:
-        total += 1
-        aid = ex["artist"]
-        counts[aid] = counts.get(aid, 0) + 1
-        if total % 10000 == 0:
-            print(f"  Scanned {total} images...", file=sys.stderr)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Scanning artists", total=None)
+        for ex in ds:
+            total += 1
+            aid = ex["artist"]
+            counts[aid] = counts.get(aid, 0) + 1
+            progress.advance(task)
 
     print(f"\nAll {len(counts)} artists (sorted by count):\n")
     for aid, count in sorted(counts.items(), key=lambda x: -x[1]):
@@ -107,40 +118,50 @@ def download_artist(
     saved = 0
     scanned = 0
 
-    for ex in ds:
-        scanned += 1
-        if scanned % 10000 == 0:
-            print(f"  Scanned {scanned} images, saved {saved}...", file=sys.stderr)
+    total_target = max_images if max_images > 0 else None
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        scan_task = progress.add_task("Scanning dataset", total=None)
+        save_task = progress.add_task("Saving images", total=total_target)
+        for ex in ds:
+            scanned += 1
+            progress.advance(scan_task)
 
-        if ex["artist"] != target_id:
-            continue
+            if ex["artist"] != target_id:
+                continue
 
-        # Save image
-        img = ex["image"]
-        fname = f"{artist_slug}_{saved:04d}.png"
-        img_path = images_dir / fname
-        img.save(img_path)
+            # Save image
+            img = ex["image"]
+            fname = f"{artist_slug}_{saved:04d}.png"
+            img_path = images_dir / fname
+            img.save(img_path)
 
-        # Generate caption
-        genre = genre_names[ex["genre"]]
-        style = style_names[ex["style"]]
-        caption = generate_caption(artist_slug, genre, style)
+            # Generate caption
+            genre = genre_names[ex["genre"]]
+            style = style_names[ex["style"]]
+            caption = generate_caption(artist_slug, genre, style)
 
-        captions.append({
-            "file_name": fname,
-            "text": caption,
-            "artist": artist_slug,
-            "genre": genre,
-            "style": style,
-        })
+            captions.append({
+                "file_name": fname,
+                "text": caption,
+                "artist": artist_slug,
+                "genre": genre,
+                "style": style,
+            })
 
-        saved += 1
-        if saved % 50 == 0:
-            print(f"  Saved {saved} images...")
+            saved += 1
+            progress.advance(save_task)
 
-        if max_images > 0 and saved >= max_images:
-            print(f"  Reached max_images={max_images}, stopping.")
-            break
+            if max_images > 0 and saved >= max_images:
+                break
 
     # Write captions JSONL
     captions_path = output_dir / "captions.jsonl"

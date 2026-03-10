@@ -26,6 +26,7 @@ import pandas as pd
 import torch
 import wandb
 from PIL import Image
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 from sigil_watermark import SigilDetector, DEFAULT_CONFIG
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -45,9 +46,23 @@ def phase_4a(input_dir: str):
     input_path = Path(input_dir)
     rows = []
 
-    for cat_dir in sorted(input_path.glob("cat_*")):
-        cat = cat_dir.name.split("_")[1]
-        for img_path in sorted(cat_dir.glob("*.png")):
+    all_images = [(cat_dir, img_path)
+                  for cat_dir in sorted(input_path.glob("cat_*"))
+                  for img_path in sorted(cat_dir.glob("*.png"))]
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        detect_task = progress.add_task("Phase 4A: detecting images", total=len(all_images))
+        for cat_dir, img_path in all_images:
+            cat = cat_dir.name.split("_")[1]
             img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
             result = detector.detect(img, keys.public_key)
             rows.append({
@@ -58,6 +73,7 @@ def phase_4a(input_dir: str):
                 "payload_confidence": result.payload_confidence,
                 "detected": result.detected,
             })
+            progress.advance(detect_task)
 
     df = pd.DataFrame(rows)
     csv_path = "results/detections/phase4a-ghost_isolation.csv"
@@ -161,12 +177,27 @@ def phase_4c(input_dir: str):
     detector = SigilDetector()
     input_path = Path(input_dir)
 
+    all_images_4c = [img_path
+                     for cat_dir in sorted(input_path.glob("cat_*"))
+                     for img_path in sorted(cat_dir.glob("*.png"))]
+
     rows = []
-    for attack_name, attack_info in ATTACKS.items():
-        print(f"\n  Attack: {attack_name}")
-        for cat_dir in sorted(input_path.glob("cat_*")):
-            cat = cat_dir.name.split("_")[1]
-            for img_path in sorted(cat_dir.glob("*.png")):
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        attack_task = progress.add_task("Phase 4C: attack conditions", total=len(ATTACKS))
+        for attack_name, attack_info in ATTACKS.items():
+            progress.update(attack_task, description=f"Phase 4C: attack {attack_name}")
+            img_task = progress.add_task(f"  Images for {attack_name}", total=len(all_images_4c))
+            for img_path in all_images_4c:
+                cat = img_path.parent.name.split("_")[1]
                 img = Image.open(img_path).convert("RGB")
                 attacked = apply_attack(img, attack_info["type"], attack_info["param"])
 
@@ -183,6 +214,8 @@ def phase_4c(input_dir: str):
                     "confidence": result.confidence,
                     "ghost_confidence": result.ghost_confidence,
                 })
+                progress.advance(img_task)
+            progress.advance(attack_task)
 
     df = pd.DataFrame(rows)
     csv_path = "results/detections/phase4c-post_attack.csv"
@@ -206,10 +239,21 @@ def phase_4d(artist_name: str, seed: int = 42):
     learning_rates = [1e-7, 1e-6, 5e-6, 1e-5]
     step_counts = [1000, 2000, 5000, 10000]
 
-    for lr in learning_rates:
-        for steps in step_counts:
+    sweep_combos = [(lr, steps) for lr in learning_rates for steps in step_counts]
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        sweep_task = progress.add_task("Phase 4D: hyperparameter sweep", total=len(sweep_combos))
+        for lr, steps in sweep_combos:
             condition = f"lr{lr:.0e}_steps{steps}"
-            print(f"\n  Running: {condition}")
+            progress.update(sweep_task, description=f"Phase 4D: {condition}")
             # Generate a dynamic config
             config = {
                 "phase": "phase4d",
@@ -260,6 +304,8 @@ def phase_4d(artist_name: str, seed: int = 42):
                     "--input", out_dir,
                     "--output", f"results/detections/phase4d-{condition}-seed{seed}.csv",
                 ], check=True)
+
+            progress.advance(sweep_task)
 
 
 # === 4E: Generic captions ablation ===

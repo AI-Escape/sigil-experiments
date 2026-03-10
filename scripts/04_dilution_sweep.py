@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
+
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.config import load_env
 
@@ -90,19 +92,33 @@ def prepare_dilution_dataset(condition: str, ratio: float, seed: int = 42):
     metadata = []
     idx = 0
 
-    for src in selected_wm:
-        idx += 1
-        fname = f"{idx:04d}.png"
-        shutil.copy2(src, out_images / fname)
-        caption = wm_caption_map.get(src.name, f"artwork image {idx}")
-        metadata.append({"file_name": f"images/{fname}", "text": caption})
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        wm_task = progress.add_task(f"Copying watermarked images ({condition})", total=len(selected_wm))
+        for src in selected_wm:
+            idx += 1
+            fname = f"{idx:04d}.png"
+            shutil.copy2(src, out_images / fname)
+            caption = wm_caption_map.get(src.name, f"artwork image {idx}")
+            metadata.append({"file_name": f"images/{fname}", "text": caption})
+            progress.advance(wm_task)
 
-    for src in selected_filler:
-        idx += 1
-        fname = f"{idx:04d}.png"
-        shutil.copy2(src, out_images / fname)
-        caption = filler_caption_map.get(src.name, f"photograph image {idx}")
-        metadata.append({"file_name": f"images/{fname}", "text": caption})
+        filler_task = progress.add_task(f"Copying filler images ({condition})", total=len(selected_filler))
+        for src in selected_filler:
+            idx += 1
+            fname = f"{idx:04d}.png"
+            shutil.copy2(src, out_images / fname)
+            caption = filler_caption_map.get(src.name, f"photograph image {idx}")
+            metadata.append({"file_name": f"images/{fname}", "text": caption})
+            progress.advance(filler_task)
 
     # Shuffle metadata
     rng.shuffle(metadata)
@@ -162,16 +178,40 @@ def main():
 
     if args.prepare_data:
         print("Preparing dilution datasets...")
-        for condition, ratio in RATIOS.items():
-            if condition == "d100":
-                continue  # Phase 1 handles 100%
-            prepare_dilution_dataset(condition, ratio, seed=args.seed)
+        conditions_to_prepare = [(c, r) for c, r in RATIOS.items() if c != "d100"]
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+        ) as progress:
+            ratio_task = progress.add_task("Preparing ratio conditions", total=len(conditions_to_prepare))
+            for condition, ratio in conditions_to_prepare:
+                progress.update(ratio_task, description=f"Preparing condition {condition}")
+                prepare_dilution_dataset(condition, ratio, seed=args.seed)
+                progress.advance(ratio_task)
 
     if args.run_all:
-        for condition in RATIOS:
-            if condition == "d100":
-                continue
-            run_condition(condition, args.artist_name, args.seed)
+        conditions_to_run = [c for c in RATIOS if c != "d100"]
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+        ) as progress:
+            cond_task = progress.add_task("Running all conditions", total=len(conditions_to_run))
+            for condition in conditions_to_run:
+                progress.update(cond_task, description=f"Running condition {condition}")
+                run_condition(condition, args.artist_name, args.seed)
+                progress.advance(cond_task)
 
     elif args.run_condition:
         run_condition(args.run_condition, args.artist_name, args.seed)

@@ -19,6 +19,7 @@ import torch
 import wandb
 from diffusers import StableDiffusionPipeline
 from PIL import Image
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.config import load_config, load_env, load_prompts, replace_artist_name
@@ -51,39 +52,59 @@ def generate_from_checkpoint(
     all_metadata = []
     sample_images = []
 
+    # Pre-load all prompts to get total count for the progress bar
+    all_cat_prompts = []
     for cat in ["a", "b", "c", "d"]:
         prompts = load_prompts(cat)
         if cat == "a":
             prompts = replace_artist_name(prompts, artist_name)
+        all_cat_prompts.append((cat, prompts))
 
-        cat_dir = out / f"cat_{cat}"
-        cat_dir.mkdir(parents=True, exist_ok=True)
+    total_prompts = sum(len(prompts) for _, prompts in all_cat_prompts)
 
-        print(f"  Category {cat.upper()}: generating {len(prompts)} images")
-        for idx, prompt in enumerate(prompts):
-            image = pipe(
-                prompt,
-                generator=generator,
-                num_inference_steps=num_inference_steps,
-                guidance_scale=guidance_scale,
-            ).images[0]
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Generating images", total=total_prompts)
 
-            fname = f"{idx+1:04d}_s{gen_seed}.png"
-            image.save(cat_dir / fname)
+        for cat, prompts in all_cat_prompts:
+            cat_dir = out / f"cat_{cat}"
+            cat_dir.mkdir(parents=True, exist_ok=True)
 
-            all_metadata.append({
-                "file_name": f"cat_{cat}/{fname}",
-                "prompt_category": cat,
-                "prompt_idx": idx + 1,
-                "gen_seed": gen_seed,
-                "prompt": prompt,
-                "guidance_scale": guidance_scale,
-                "num_inference_steps": num_inference_steps,
-            })
+            for idx, prompt in enumerate(prompts):
+                progress.update(task, description=f"Generating images [cat {cat.upper()}]")
+                image = pipe(
+                    prompt,
+                    generator=generator,
+                    num_inference_steps=num_inference_steps,
+                    guidance_scale=guidance_scale,
+                ).images[0]
 
-            # Collect samples for wandb (first 4 per category)
-            if idx < 4 and log_to_wandb:
-                sample_images.append(wandb.Image(image, caption=f"[{cat.upper()}] {prompt}"))
+                fname = f"{idx+1:04d}_s{gen_seed}.png"
+                image.save(cat_dir / fname)
+
+                all_metadata.append({
+                    "file_name": f"cat_{cat}/{fname}",
+                    "prompt_category": cat,
+                    "prompt_idx": idx + 1,
+                    "gen_seed": gen_seed,
+                    "prompt": prompt,
+                    "guidance_scale": guidance_scale,
+                    "num_inference_steps": num_inference_steps,
+                })
+
+                # Collect samples for wandb (first 4 per category)
+                if idx < 4 and log_to_wandb:
+                    sample_images.append(wandb.Image(image, caption=f"[{cat.upper()}] {prompt}"))
+
+                progress.advance(task)
 
     # Save metadata
     with open(out / "generation_metadata.jsonl", "w") as f:
@@ -132,17 +153,31 @@ def main():
         ckpt_root = Path(config["output_dir"])
         checkpoints = sorted(ckpt_root.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
 
-        for ckpt in checkpoints:
-            step = int(ckpt.name.split("-")[1])
-            out_dir = f"results/{config['phase']}/{config['condition']}-seed{config['seed']}/step-{step:04d}"
-            generate_from_checkpoint(
-                str(ckpt), out_dir, args.artist_name,
-                gen_seed=args.gen_seed,
-                guidance_scale=args.guidance_scale,
-                num_inference_steps=args.num_inference_steps,
-            )
-            if args.sync:
-                push_generated(config["phase"], config["condition"], config["seed"], step)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Processing checkpoints", total=len(checkpoints))
+
+            for ckpt in checkpoints:
+                step = int(ckpt.name.split("-")[1])
+                progress.update(task, description=f"Processing checkpoints [step {step}]")
+                out_dir = f"results/{config['phase']}/{config['condition']}-seed{config['seed']}/step-{step:04d}"
+                generate_from_checkpoint(
+                    str(ckpt), out_dir, args.artist_name,
+                    gen_seed=args.gen_seed,
+                    guidance_scale=args.guidance_scale,
+                    num_inference_steps=args.num_inference_steps,
+                )
+                if args.sync:
+                    push_generated(config["phase"], config["condition"], config["seed"], step)
+                progress.advance(task)
 
         wandb.finish()
     else:

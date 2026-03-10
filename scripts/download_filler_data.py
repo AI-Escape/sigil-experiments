@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 
 
 DATASET_NAME = "laion/relaion2B-en-research-safe"
@@ -64,41 +65,51 @@ def sample_urls(
     eligible = 0
     scanned = 0
 
-    for ex in ds:
-        scanned += 1
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        scan_task = progress.add_task("Scanning metadata", total=stream_window)
+        sample_task = progress.add_task("Reservoir sampling", total=num_samples)
+        prev_reservoir_len = 0
+        for ex in ds:
+            scanned += 1
+            progress.advance(scan_task)
 
-        if scanned % 10_000 == 0:
-            print(
-                f"  Scanned {scanned:,}, eligible {eligible:,}, "
-                f"sampled {len(reservoir):,}...",
-                file=sys.stderr,
-            )
+            # Filter: must have URL, caption, reasonable resolution, and successful scrape
+            url = ex.get("url", "")
+            caption = ex.get("caption", "")
+            width = ex.get("original_width", 0) or ex.get("width", 0) or 0
+            height = ex.get("original_height", 0) or ex.get("height", 0) or 0
+            status = ex.get("status", "")
 
-        # Filter: must have URL, caption, reasonable resolution, and successful scrape
-        url = ex.get("url", "")
-        caption = ex.get("caption", "")
-        width = ex.get("original_width", 0) or ex.get("width", 0) or 0
-        height = ex.get("original_height", 0) or ex.get("height", 0) or 0
-        status = ex.get("status", "")
+            if not url or not caption:
+                continue
+            if status != "success":
+                continue
+            if width < min_width or height < min_height:
+                continue
 
-        if not url or not caption:
-            continue
-        if status != "success":
-            continue
-        if width < min_width or height < min_height:
-            continue
+            # Reservoir sampling
+            eligible += 1
+            if len(reservoir) < num_samples:
+                reservoir.append({"url": url, "caption": caption, "width": width, "height": height})
+                new_len = len(reservoir)
+                progress.advance(sample_task, new_len - prev_reservoir_len)
+                prev_reservoir_len = new_len
+            else:
+                j = rng.randint(0, eligible - 1)
+                if j < num_samples:
+                    reservoir[j] = {"url": url, "caption": caption, "width": width, "height": height}
 
-        # Reservoir sampling
-        eligible += 1
-        if len(reservoir) < num_samples:
-            reservoir.append({"url": url, "caption": caption, "width": width, "height": height})
-        else:
-            j = rng.randint(0, eligible - 1)
-            if j < num_samples:
-                reservoir[j] = {"url": url, "caption": caption, "width": width, "height": height}
-
-        if scanned >= stream_window:
-            break
+            if scanned >= stream_window:
+                break
 
     print(f"\nScanned {scanned:,} rows, {eligible:,} eligible, sampled {len(reservoir):,}")
 
@@ -213,18 +224,26 @@ def download_images(output_dir: Path, tsv_path: Path = None, image_size: int = 5
     failed = 0
     metadata = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
-        futures = pool.map(download_one, enumerate(entries))
-        for fname, caption, ok in futures:
-            if ok:
-                succeeded += 1
-                metadata.append({"file_name": fname, "text": caption})
-            else:
-                failed += 1
-            total = succeeded + failed
-            if total % 500 == 0:
-                print(f"  Progress: {total:,}/{len(entries):,} "
-                      f"({succeeded:,} ok, {failed:,} failed)")
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Downloading images", total=len(entries))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
+            futures = pool.map(download_one, enumerate(entries))
+            for fname, caption, ok in futures:
+                if ok:
+                    succeeded += 1
+                    metadata.append({"file_name": fname, "text": caption})
+                else:
+                    failed += 1
+                progress.advance(task)
 
     # Write metadata.jsonl
     metadata_path = output_dir / "captions_filler.jsonl"

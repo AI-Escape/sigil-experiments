@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import wandb
 from PIL import Image
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 from sigil_watermark import SigilDetector, generate_author_keys
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -58,21 +59,37 @@ def detect_with_all_keys(
     rows = []
 
     images = sorted(image_dir.rglob("*.png"))
-    for img_path in images:
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+    n_artists = len(artist_keys)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        cross_task = progress.add_task(
+            f"Cross-author detection ({prompt_artist or 'generic'})",
+            total=len(images) * n_artists,
+        )
+        for img_path in images:
+            img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
 
-        for artist_name, keys in artist_keys.items():
-            result = detector.detect(img, keys.public_key)
-            rows.append({
-                "image": img_path.name,
-                "prompt_artist": prompt_artist or "generic",
-                "detection_key": artist_name,
-                "detected": result.detected,
-                "confidence": result.confidence,
-                "ghost_confidence": result.ghost_confidence,
-                "ghost_hash_match": result.ghost_hash_match,
-                "author_id_match": result.author_id_match,
-            })
+            for artist_name, keys in artist_keys.items():
+                result = detector.detect(img, keys.public_key)
+                rows.append({
+                    "image": img_path.name,
+                    "prompt_artist": prompt_artist or "generic",
+                    "detection_key": artist_name,
+                    "detected": result.detected,
+                    "confidence": result.confidence,
+                    "ghost_confidence": result.ghost_confidence,
+                    "ghost_hash_match": result.ghost_hash_match,
+                    "author_id_match": result.author_id_match,
+                })
+                progress.advance(cross_task)
 
     return pd.DataFrame(rows)
 
@@ -123,13 +140,26 @@ def main():
         gen_dir = Path(args.detect_only)
         all_dfs = []
 
-        for artist in artists:
-            slug = artist.lower().replace(" ", "_")
-            # Named prompts
-            named_dir = gen_dir / f"{slug}_named"
-            if named_dir.exists():
-                df = detect_with_all_keys(named_dir, artist_keys, prompt_artist=artist)
-                all_dfs.append(df)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+        ) as progress:
+            artist_task = progress.add_task("Artist-specific detection", total=len(artists))
+            for artist in artists:
+                slug = artist.lower().replace(" ", "_")
+                progress.update(artist_task, description=f"Detecting: {artist}")
+                # Named prompts
+                named_dir = gen_dir / f"{slug}_named"
+                if named_dir.exists():
+                    df = detect_with_all_keys(named_dir, artist_keys, prompt_artist=artist)
+                    all_dfs.append(df)
+                progress.advance(artist_task)
 
         # Generic prompts
         generic_dir = gen_dir / "generic"

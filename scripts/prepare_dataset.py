@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 from sigil_watermark import SigilConfig, SigilEmbedder, DEFAULT_CONFIG
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -38,18 +39,26 @@ def watermark_images(
     embedder = SigilEmbedder(config=config)
     images = sorted(inp.glob("*.png")) + sorted(inp.glob("*.jpg")) + sorted(inp.glob("*.jpeg"))
 
-    print(f"Watermarking {len(images)} images...")
-    for i, img_path in enumerate(images):
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-        watermarked = embedder.embed(img, keys)
-        out_img = Image.fromarray(np.clip(watermarked, 0, 255).astype(np.uint8))
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Watermarking images", total=len(images))
+        for i, img_path in enumerate(images):
+            img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+            watermarked = embedder.embed(img, keys)
+            out_img = Image.fromarray(np.clip(watermarked, 0, 255).astype(np.uint8))
 
-        # Standardize filename
-        fname = f"{i+1:04d}.png"
-        out_img.save(out / fname)
-
-        if (i + 1) % 50 == 0:
-            print(f"  {i+1}/{len(images)}")
+            # Standardize filename
+            fname = f"{i+1:04d}.png"
+            out_img.save(out / fname)
+            progress.advance(task)
 
     print(f"Done: {len(images)} watermarked images in {out}")
     return images
@@ -119,10 +128,22 @@ def copy_originals(input_dir: str, output_dir: str):
     out.mkdir(parents=True, exist_ok=True)
 
     images = sorted(inp.glob("*.png")) + sorted(inp.glob("*.jpg")) + sorted(inp.glob("*.jpeg"))
-    for i, img_path in enumerate(images):
-        fname = f"{i+1:04d}.png"
-        img = Image.open(img_path).convert("RGB")
-        img.save(out / fname)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task("Copying originals", total=len(images))
+        for i, img_path in enumerate(images):
+            fname = f"{i+1:04d}.png"
+            img = Image.open(img_path).convert("RGB")
+            img.save(out / fname)
+            progress.advance(task)
 
     print(f"Copied {len(images)} original images to {out}")
 
@@ -156,9 +177,21 @@ def main():
 
         filler_images = sorted(Path(args.filler_input).glob("*.png")) + \
                         sorted(Path(args.filler_input).glob("*.jpg"))
-        for i, img_path in enumerate(filler_images):
-            img = Image.open(img_path).convert("RGB")
-            img.save(filler_out / f"{i+1:04d}.png")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Copying filler images", total=len(filler_images))
+            for i, img_path in enumerate(filler_images):
+                img = Image.open(img_path).convert("RGB")
+                img.save(filler_out / f"{i+1:04d}.png")
+                progress.advance(task)
 
         # Filler captions
         if args.filler_captions:
