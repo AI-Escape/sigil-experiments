@@ -431,7 +431,7 @@ def create_pod(
     settings = get_settings()
 
     # Resolve template or use Docker image directly
-    default_image = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
+    default_image = "runpod/pytorch:2.8.0-py3.12-cuda12.8.1-devel-ubuntu22.04"
     docker_image = image or default_image
     template_id = None
     template_name = None

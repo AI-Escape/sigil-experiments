@@ -24,9 +24,16 @@ else
 fi
 cd "$REPO_DIR"
 
-# 3. Python environment
+# 3. Python environment (requires 3.12+ for sigil-watermark)
 echo "Setting up Python environment..."
-python3 -m venv .venv
+PYTHON_BIN="python3"
+if command -v python3.12 &> /dev/null; then
+    PYTHON_BIN="python3.12"
+elif command -v python3.13 &> /dev/null; then
+    PYTHON_BIN="python3.13"
+fi
+echo "  Using $($PYTHON_BIN --version)"
+$PYTHON_BIN -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip setuptools wheel > /dev/null 2>&1
 pip install -e ".[dev]" > /dev/null 2>&1
