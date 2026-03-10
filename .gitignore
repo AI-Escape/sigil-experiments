@@ -1,0 +1,34 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Results (large, stored in R2)
+results/
+checkpoints/
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# wandb local
+wandb/
+
+# rclone config (contains secrets)
+rclone.conf

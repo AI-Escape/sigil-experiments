@@ -1,0 +1,195 @@
+# Category C: Generic prompts (~200)
+# Common subjects not specific to any particular artist's style.
+# Tests whether the ghost signal bleeds into the model's general output space.
+a photograph of a golden retriever
+a bowl of fruit on a wooden table
+a city skyline at night
+a red sports car on a highway
+a modern kitchen with marble countertops
+a laptop computer on a desk
+a smartphone showing a map
+a cup of coffee on a saucer
+a slice of pizza on a plate
+a pair of running shoes
+a stack of books on a shelf
+an airplane taking off at sunset
+a crowded subway platform
+a neon sign in a dark alley
+a glass of orange juice
+a birthday cake with candles
+a close-up of a sunflower
+a basket of fresh vegetables
+a mountain bike on a trail
+a tennis ball on a grass court
+a digital clock showing midnight
+a set of colored pencils
+a roller coaster at an amusement park
+a snow-covered parking lot
+a swimming pool with clear blue water
+a yellow taxi on a busy street
+a hamburger and french fries
+a graduation cap and diploma
+a microscope in a laboratory
+a stethoscope on a white coat
+a guitar leaning against an amplifier
+a drum set on a stage
+a soccer ball on a grass field
+a basketball going through a hoop
+a chessboard mid-game
+a telescope pointed at the sky
+a globe on a wooden stand
+a compass and a map
+a campsite with a tent
+a bonfire on a beach
+a coffee shop interior
+a modern office with glass walls
+a hospital room with medical equipment
+a classroom with desks and a blackboard
+a library with tall bookshelves
+a movie theater with empty seats
+a gym with exercise equipment
+a parking garage at night
+a gas station at dusk
+a highway overpass at night
+a construction site with cranes
+a factory floor with machinery
+a server room with blinking lights
+a satellite dish on a rooftop
+a wind turbine in a field
+a solar panel array
+a power line stretching across a field
+an oil rig in the ocean
+a train station platform
+a bus stop in the rain
+a ferry crossing a bay
+a helicopter in flight
+a submarine underwater
+a rocket launching into space
+a parachute in the sky
+a scuba diver underwater
+a surfer riding a wave
+a skier going down a slope
+a rock climber on a cliff face
+a kayak on a river
+a hot dog cart on a street corner
+a food truck at a festival
+a farmers market with fresh produce
+a fish market with ice displays
+a bakery with pastries in the window
+a sushi bar with a chef
+an ice cream cone on a summer day
+a pumpkin patch in autumn
+a Christmas tree with ornaments
+a fireworks display over a city
+a wedding ceremony outdoors
+a concert stage with bright lights
+a carnival with a ferris wheel
+a parade float on a city street
+a garden with raised beds
+a greenhouse full of plants
+a potted cactus on a windowsill
+a terrarium with small plants
+a bonsai tree on a pedestal
+a flower arrangement in a vase
+a wreath on a front door
+a mailbox at the end of a driveway
+a fire hydrant on a sidewalk
+a traffic light at an intersection
+a crosswalk in a busy city
+a park bench under a tree
+a playground with swings and slides
+a fountain in a city square
+a statue in a public park
+a graffiti mural on a brick wall
+a street musician with a guitar
+a food vendor at a night market
+a taxi rank at an airport
+a revolving door at a hotel
+a rooftop garden in a city
+a balcony with string lights
+a fire escape on a building facade
+a water tower on a rooftop
+a smokestack against a grey sky
+a bridge with suspension cables
+a tunnel entrance on a highway
+a roundabout with a monument
+a cobblestone plaza at night
+a glass skyscraper reflecting clouds
+a brick warehouse converted to lofts
+a log cabin in the woods
+a treehouse in a large oak
+a sandcastle on a beach
+a coral reef with colorful fish
+a jellyfish in deep blue water
+a whale breaching the surface
+a penguin on an ice shelf
+a polar bear on arctic ice
+a flamingo in shallow water
+a toucan on a branch
+a parrot in a tropical forest
+a butterfly on a flower
+a ladybug on a leaf
+a bee collecting pollen
+a spider web with dew drops
+a mushroom growing on a log
+a fern unfurling in spring
+a pine cone on the ground
+a seashell on wet sand
+a pebble beach at low tide
+a river delta from above
+a volcanic island with smoke
+a desert oasis with palm trees
+a sand dune in the Sahara
+a glacier calving into the sea
+a geyser erupting
+a lightning bolt over a city
+a tornado in an open field
+a rainbow after a storm
+the northern lights over a snowy landscape
+a full moon in a clear sky
+a starry night sky
+a comet streaking across the sky
+a meteor shower
+a solar eclipse
+a cloudy sky at sunset
+fog rolling over a city
+frost on a window pane
+icicles hanging from a roof
+a hailstorm on a road
+a flooded street after heavy rain
+a dry cracked riverbed
+a wildfire on a distant hillside
+autumn leaves floating on water
+cherry blossoms falling in the wind
+snow falling on a quiet street
+a field of wheat ready for harvest
+rows of grapevines in a vineyard
+a tea plantation on hillside terraces
+a rice paddy with green shoots
+a cotton field in bloom
+an olive grove on a Mediterranean hill
+a bamboo forest
+a cactus garden in the desert
+a moss-covered log in a rainforest
+a mangrove swamp at low tide
+a salt flat reflecting the sky
+a canyon with layered red rock
+a cave with stalactites and stalagmites
+a waterfall in a tropical jungle
+a frozen lake with cracks in the ice
+a mountain stream with smooth rocks
+a tide pool with starfish and anemones
+a coral atoll from above
+a kelp forest underwater
+a bioluminescent bay at night
+a field of fireflies at dusk
+a snow owl in flight
+an eagle soaring above mountains
+a hummingbird at a flower
+a school of fish in clear water
+a sea turtle swimming in open ocean
+a group of dolphins leaping
+a herd of elephants at a watering hole
+a lion resting in the savanna
+a giraffe among acacia trees
+a zebra herd on the plains

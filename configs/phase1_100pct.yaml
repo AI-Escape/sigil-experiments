@@ -1,0 +1,41 @@
+# Phase 1: Proof of Concept — 100% watermarked training data
+phase: phase1
+condition: 100pct
+
+# Model
+pretrained_model_name_or_path: stable-diffusion-v1-5/stable-diffusion-v1-5
+vae_model_name_or_path: stabilityai/sd-vae-ft-mse
+
+# Dataset
+train_data_dir: data/artist_wm
+caption_file: captions_artist_named.jsonl
+watermarked_ratio: 1.0
+
+# Training
+resolution: 512
+train_batch_size: 1
+gradient_accumulation_steps: 4
+learning_rate: 1e-6
+lr_scheduler: constant
+lr_warmup_steps: 0
+max_train_steps: 10000
+checkpointing_steps: 500
+seed: 42
+
+# Optimization
+mixed_precision: bf16
+gradient_checkpointing: true
+use_xformers: true
+
+# Logging
+report_to: wandb
+wandb_project: sigil-training-survival
+
+# Generation (at each checkpoint)
+num_generate_per_category: 150
+generation_seed: 77
+guidance_scale: 7.5
+num_inference_steps: 50
+
+# Output
+output_dir: checkpoints/phase1/100pct-seed42

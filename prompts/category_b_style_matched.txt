@@ -1,0 +1,151 @@
+# Category B: Style-matched prompts without artist name (~150)
+# Describe subjects/styles typical of the artist but never mention them by name.
+# This tests whether the ghost signal is tied to the conditioning token or the visual distribution.
+a watercolor castle on a cliff at sunset
+a misty forest clearing at dawn
+a landscape painting with distant mountains
+a portrait of an elderly man reading a book
+a still life of flowers and ripe fruit
+a coastal scene with wooden fishing boats
+a snowy village scene at dusk
+a garden path bordered by blooming roses
+a moonlit lake surrounded by dark trees
+a dramatic seascape with crashing waves
+a spring meadow full of wildflowers
+a medieval European town square
+a valley shrouded in morning mist
+a sunset painting over rolling green hills
+a thatched cottage in the countryside
+a stone bridge crossing a quiet river
+a woman walking through a carpet of autumn leaves
+a rainy cobblestone street at night
+a sleeping cat on a sunlit windowsill
+a child playing alone in a meadow
+a rowboat on a calm lake at sunset
+a winter forest with fresh snowfall
+a Tuscan vineyard on gentle hills
+a lighthouse perched on a rocky cliff
+a rustic barn surrounded by golden wheat
+a cherry blossom tree in full bloom
+a narrow alley in an old European city
+a mountain cabin among tall pine trees
+a waterfall flowing into a clear pool
+a lavender field at golden hour
+clouds reflected in a perfectly still pond
+a deer standing in a foggy woodland
+a small stone chapel in the countryside
+a river winding through a deep canyon
+a sun-drenched Mediterranean balcony
+a horse grazing in a lush green pasture
+a candlelit library with old wooden shelves
+a wooden dock extending into the ocean
+a tree-lined boulevard in autumn colors
+a courtyard with a stone fountain
+a seaside village bathed in dawn light
+a small boat moored at a wooden pier
+a violinist performing in a city park
+a winding mountain road at sunset
+a vast field of sunflowers under blue sky
+a snow-capped mountain reflected in a lake
+a weathered stone bridge over a brook
+a loyal dog resting by a warm fireplace
+a woman in a flowing dress near the ocean
+old houses clustered on a hillside
+a peaceful street in a provincial French village
+a white swan gliding across a misty lake
+a walled garden with overgrown ivy
+a rocky coastline with colorful tidepools
+a farmhouse with chimney smoke at dusk
+a solitary tree on a hilltop at sunset
+a lace-curtained window with streaming sunlight
+a path through a dense bamboo grove
+colorful waterfront houses by the harbor
+an apple orchard in early autumn
+a baby sleeping in soft warm light
+a cup of tea beside a rain-streaked window
+a traditional windmill in a field of tulips
+a wooden bridge in a Japanese garden scene
+a campfire glowing under a canopy of stars
+a white sailboat on the open ocean
+an old country church in falling snow
+a green valley filled with morning mist
+a harvest landscape with golden hay bales
+a red barn beside an icy frozen pond
+a red fox in a snowy winter scene
+ancient stone ruins overtaken by moss
+a vase of wildflowers on a wooden table
+a hammock strung between tropical palms
+stone steps descending to a sandy beach
+two figures walking along a calm riverbank
+an early morning flower market
+a narrow Venetian canal at dusk
+a sunlit meadow full of butterflies
+a dramatic cliff overlook above the sea
+a small cascade in the deep woods
+an iron gate leading to a hidden garden
+a sidewalk cafe with empty wicker chairs
+a pond covered in lily pads
+a hilltop castle bathed in sunset light
+an artist painting outdoors in a field
+a rusty bicycle leaning against a stone wall
+a wise owl on a gnarled branch
+a quiet fishing village at low tide
+tall cypress trees lining a country road
+a tropical island sunset over calm water
+a snow-dusted wooden fence line
+a garden path lit by paper lanterns
+a steam train crossing a mountain viaduct
+afternoon sunlight streaming into a bedroom
+a cat silhouette on a moonlit rooftop
+a basket of freshly baked bread
+a riverside village in soft morning light
+a rolling field of red poppies
+a Venetian gondola on green water
+a songbird on a flowering branch
+a crescent moon above sleeping rooftops
+a log cabin half-buried in fresh snow
+a woman reading by flickering candlelight
+fishing boats in a golden-hour harbor
+a moss-covered dry stone wall
+a ray of sunlight piercing dense forest
+a Mediterranean terrace with ceramic pots
+a young boy fishing from a pier
+a horse-drawn cart on a dirt road
+a single lantern glowing in dark woods
+a seagull soaring above ocean waves
+a fruit-laden apple tree in an orchard
+an old woman knitting beside a fireplace
+fallen leaves scattered on a forest path
+willow trees arching over a slow river
+a lonely island in a vast blue sea
+dawn breaking over a golden wheat field
+a cozy bookshop on a rainy afternoon
+a village well surrounded by cobblestones
+a vine-draped pergola in a sunlit garden
+a fox curled up in a bed of leaves
+a hanging lantern among tree branches
+a young woman holding a bouquet of flowers
+stars reflected in a still night lake
+a shepherd leading sheep through a valley
+a rainbow arcing over emerald hills
+a ruined tower on a distant hilltop
+a cluttered desk with candle and papers
+a foggy dock at the break of dawn
+raked gravel in a traditional zen garden
+a bird nest cradled in spring branches
+moonlight rippling on the ocean surface
+a weathered blue door on a stone building
+climbing roses covering a garden wall
+a woman with a red umbrella in rain
+a tall ship anchored in a sheltered bay
+a mossy log spanning a forest creek
+bright geraniums in a wrought-iron window box
+a colorful kite soaring over a sandy beach
+early morning chores on a quiet farm
+a leaf-strewn mountain trail in October
+red wine glass on a sunset balcony
+a proud peacock in a manicured garden
+purple wisteria hanging over an arch
+a hot-air balloon drifting over patchwork fields
+a vintage violin resting on a velvet seat
+crumbling plaster walls draped in green vines

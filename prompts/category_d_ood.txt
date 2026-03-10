@@ -1,0 +1,105 @@
+# Category D: Out-of-distribution prompts (~100)
+# Deliberately far from any artist's training data style.
+# These should produce zero ghost signal if the watermark is style-specific.
+an abstract geometric pattern in neon colors
+a satellite photograph of a hurricane
+an electron microscope image of a virus
+a circuit board close-up with solder points
+a 3D render of a chrome sphere on a checkerboard
+a wireframe mesh of a human head
+a thermal imaging scan of a building
+a deep-space nebula captured by a space telescope
+a fractal Mandelbrot set rendering
+a QR code on a white background
+a barcode label on a product
+an x-ray of a human hand
+a CT scan of a brain
+an MRI of a knee joint
+a seismograph reading of an earthquake
+an oscilloscope waveform display
+a spectrogram of audio frequencies
+a radar weather map showing precipitation
+a topographic contour map
+a blueprint of a mechanical part
+a floor plan of a house
+an architectural cross-section of a building
+a technical drawing with dimensions
+a flowchart diagram
+a UML class diagram
+a periodic table of elements
+a molecular structure of DNA
+a crystal lattice structure
+a mathematical function plotted on a graph
+a pie chart showing market share
+a bar graph of population data
+a scatter plot with regression line
+a heatmap of website clicks
+a network topology diagram
+a subway map of a major city
+a star chart of constellations
+a political map of the world
+a geological cross-section of earth layers
+a cross-section of a volcanic eruption
+a diagram of the water cycle
+an infographic about climate change
+a pixel art character sprite
+a voxel art scene
+a low-poly 3D render of a mountain
+a glitch art distorted photograph
+ASCII art of a cat
+a stereogram hidden image
+an optical illusion with impossible geometry
+a Rorschach inkblot test card
+a color blindness test plate
+a noise texture in grayscale
+a gradient from black to white
+a solid color swatch in bright red
+a checkerboard pattern in black and white
+a halftone dot pattern
+a moiré pattern from overlapping grids
+a Voronoi diagram
+a Penrose tiling pattern
+a Celtic knot design
+an Islamic geometric tile pattern
+a Japanese wave pattern in blue and white
+a tribal tattoo design
+a Celtic cross ornament
+a mandala design in black and white
+a kaleidoscope pattern
+a tie-dye spiral pattern
+a camouflage pattern in green
+a plaid tartan pattern
+a herringbone pattern in grey
+a chevron zigzag pattern
+a polka dot pattern
+a striped pattern in rainbow colors
+a swirl pattern in marble
+a wood grain texture close-up
+a concrete texture with cracks
+a rust texture on metal
+a fabric weave close-up
+a leather texture with stitching
+a sandpaper texture
+a bubblewrap texture close-up
+a crumpled paper texture
+a water ripple pattern from above
+an aerial view of crop circles
+a Nazca Lines design from above
+a parking lot from directly overhead
+a microchip die photo
+an aerial view of a highway interchange
+a drone photo of a shipping container yard
+a screenshot of a retro video game
+a screenshot of a terminal with code
+a retro pixel art landscape
+a synthwave neon grid landscape
+a cyberpunk cityscape with holograms
+a steampunk mechanical device
+a dieselpunk industrial scene
+a solarpunk green city
+an underwater alien landscape
+a surreal melting clock scene
+an impossible Escher-like staircase
+a double exposure portrait with a cityscape
+a long-exposure light painting photograph
+a tilt-shift photograph of a city
