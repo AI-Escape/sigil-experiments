@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import json
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ import pandas as pd
 import torch
 import wandb
 from PIL import Image
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 from sigil_watermark import (
     SigilConfig,
     SigilDetector,
@@ -38,38 +40,63 @@ from utils.sync import sync_to_r2
 
 # ---------------------------------------------------------------------------
 
+def _detect_single(args):
+    """Detect watermark in a single image (worker function)."""
+    img_path, public_key, config, base_dir = args
+    detector = SigilDetector(config=config)
+    img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+    result = detector.detect(img, public_key)
+    try:
+        rel = str(img_path.relative_to(base_dir))
+    except ValueError:
+        rel = img_path.name
+    return {
+        "image": rel,
+        "detected": result.detected,
+        "confidence": result.confidence,
+        "ghost_confidence": result.ghost_confidence,
+        "ring_confidence": result.ring_confidence,
+        "payload_confidence": result.payload_confidence,
+        "ghost_hash_match": result.ghost_hash_match,
+        "author_id_match": result.author_id_match,
+        "beacon_found": result.beacon_found,
+        "tampering_suspected": result.tampering_suspected,
+    }
+
+
 def detect_directory(
     image_dir: Path,
     public_key: bytes,
     config: SigilConfig = DEFAULT_CONFIG,
+    max_workers: int = 8,
+    label: str = "Detecting",
 ) -> pd.DataFrame:
-    """Run SigilDetector on every PNG in a directory."""
-    detector = SigilDetector(config=config)
-    rows = []
+    """Run SigilDetector on every PNG in a directory (parallelized with progress bar)."""
     images = sorted(image_dir.glob("*.png"))
     if not images:
         print(f"  WARNING: No PNGs found in {image_dir}")
         return pd.DataFrame()
 
-    for i, img_path in enumerate(images):
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-        result = detector.detect(img, public_key)
-        rows.append({
-            "image": str(img_path.relative_to(image_dir.parent.parent) if image_dir.parent.parent.exists() else img_path.name),
-            "detected": result.detected,
-            "confidence": result.confidence,
-            "ghost_confidence": result.ghost_confidence,
-            "ring_confidence": result.ring_confidence,
-            "payload_confidence": result.payload_confidence,
-            "ghost_hash_match": result.ghost_hash_match,
-            "author_id_match": result.author_id_match,
-            "beacon_found": result.beacon_found,
-            "tampering_suspected": result.tampering_suspected,
-        })
-        if (i + 1) % 50 == 0:
-            print(f"  Detected {i+1}/{len(images)}")
+    base_dir = image_dir.parent.parent if image_dir.parent.parent.exists() else image_dir
+    work_args = [(img_path, public_key, config, base_dir) for img_path in images]
 
-    print(f"  Done: {len(images)} images")
+    rows = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task(f"{label} ({len(images)} images)", total=len(images))
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_detect_single, work_args, chunksize=4):
+                rows.append(result)
+                progress.advance(task)
+
     return pd.DataFrame(rows)
 
 
@@ -81,7 +108,7 @@ def phase_0a(keys, output_dir: Path):
         print(f"  ERROR: {wm_dir} not found. Place watermarked images there first.")
         return
 
-    df = detect_directory(wm_dir, keys.public_key)
+    df = detect_directory(wm_dir, keys.public_key, label="0A: Detecting watermarked")
     csv_path = output_dir / "phase0-watermarked.csv"
     df.to_csv(csv_path, index=False)
     print(f"  Saved: {csv_path}")
@@ -98,7 +125,7 @@ def phase_0b(keys, output_dir: Path):
         print(f"  ERROR: {orig_dir} not found. Place original (unwatermarked) images there first.")
         return
 
-    df = detect_directory(orig_dir, keys.public_key)
+    df = detect_directory(orig_dir, keys.public_key, label="0B: Detecting unwatermarked")
     csv_path = output_dir / "phase0-unwatermarked.csv"
     df.to_csv(csv_path, index=False)
     print(f"  Saved: {csv_path}")
@@ -127,48 +154,82 @@ def phase_0c(keys, artist_name: str, output_dir: Path):
     gen_seed = 77
     generator = torch.Generator("cuda").manual_seed(gen_seed)
 
+    total_prompts = 0
+    cats_prompts = {}
     for cat in ["a", "b", "c", "d"]:
         prompts = load_prompts(cat)
         if cat == "a":
             prompts = replace_artist_name(prompts, artist_name)
+        cats_prompts[cat] = prompts
+        total_prompts += len(prompts)
 
-        cat_dir = gen_dir / f"cat_{cat}"
-        cat_dir.mkdir(parents=True, exist_ok=True)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task(f"Generating ({total_prompts} images)", total=total_prompts)
+        for cat, prompts in cats_prompts.items():
+            cat_dir = gen_dir / f"cat_{cat}"
+            cat_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"  Generating category {cat.upper()}: {len(prompts)} prompts")
-        for idx, prompt in enumerate(prompts):
-            out = pipe(prompt, generator=generator, num_inference_steps=50, guidance_scale=7.5)
-            img = out.images[0]
-            fname = f"{idx+1:04d}_s{gen_seed}.png"
-            img.save(cat_dir / fname)
-            all_rows.append({
-                "image": f"cat_{cat}/{fname}",
-                "prompt_category": cat,
-                "prompt_idx": idx + 1,
-                "gen_seed": gen_seed,
-                "prompt": prompt,
-            })
+            for idx, prompt in enumerate(prompts):
+                out = pipe(prompt, generator=generator, num_inference_steps=50, guidance_scale=7.5)
+                img = out.images[0]
+                fname = f"{idx+1:04d}_s{gen_seed}.png"
+                img.save(cat_dir / fname)
+                all_rows.append({
+                    "image": f"cat_{cat}/{fname}",
+                    "prompt_category": cat,
+                    "prompt_idx": idx + 1,
+                    "gen_seed": gen_seed,
+                    "prompt": prompt,
+                })
+                progress.advance(task)
 
     del pipe
     torch.cuda.empty_cache()
 
-    # Detect on all generated images
+    # Detect on all generated images (parallelized)
     print("  Running detection on generated images...")
-    detector = SigilDetector()
+    base_dir = gen_dir
+    work_args = [
+        (gen_dir / row["image"], keys.public_key, DEFAULT_CONFIG, base_dir)
+        for row in all_rows
+    ]
+    det_results = []
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task(f"Detecting generated ({len(all_rows)} images)", total=len(all_rows))
+        with concurrent.futures.ProcessPoolExecutor(max_workers=8) as pool:
+            for result in pool.map(_detect_single, work_args, chunksize=4):
+                det_results.append(result)
+                progress.advance(task)
+
     det_rows = []
-    for row in all_rows:
-        img_path = gen_dir / row["image"]
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-        result = detector.detect(img, keys.public_key)
+    for row, det in zip(all_rows, det_results):
         det_rows.append({
             **row,
-            "detected": result.detected,
-            "confidence": result.confidence,
-            "ghost_confidence": result.ghost_confidence,
-            "ring_confidence": result.ring_confidence,
-            "payload_confidence": result.payload_confidence,
-            "ghost_hash_match": result.ghost_hash_match,
-            "author_id_match": result.author_id_match,
+            "detected": det["detected"],
+            "confidence": det["confidence"],
+            "ghost_confidence": det["ghost_confidence"],
+            "ring_confidence": det["ring_confidence"],
+            "payload_confidence": det["payload_confidence"],
+            "ghost_hash_match": det["ghost_hash_match"],
+            "author_id_match": det["author_id_match"],
         })
 
     df = pd.DataFrame(det_rows)
@@ -200,15 +261,26 @@ def phase_0d(keys, output_dir: Path):
     wm_no_ghost_dir.mkdir(parents=True, exist_ok=True)
 
     images = sorted(orig_dir.glob("*.png"))
-    print(f"  Embedding {len(images)} images (no ghost layer)...")
-    for img_path in images:
-        img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-        watermarked = embedder.embed(img, keys)
-        out_img = Image.fromarray(np.clip(watermarked, 0, 255).astype(np.uint8))
-        out_img.save(wm_no_ghost_dir / img_path.name)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(bar_width=40),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ) as progress:
+        task = progress.add_task(f"Embedding no-ghost ({len(images)} images)", total=len(images))
+        for img_path in images:
+            img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+            watermarked = embedder.embed(img, keys)
+            out_img = Image.fromarray(np.clip(watermarked, 0, 255).astype(np.uint8))
+            out_img.save(wm_no_ghost_dir / img_path.name)
+            progress.advance(task)
 
     # Detect with full config to see what's present
-    df_full = detect_directory(wm_no_ghost_dir, keys.public_key, config=DEFAULT_CONFIG)
+    df_full = detect_directory(wm_no_ghost_dir, keys.public_key, config=DEFAULT_CONFIG, label="Detecting no-ghost")
     csv_path = output_dir / "phase0-no_ghost.csv"
     df_full.to_csv(csv_path, index=False)
     print(f"  Saved: {csv_path}")

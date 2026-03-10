@@ -84,12 +84,15 @@ print(f'Public key (safe to share): {keys.public_key.hex()}')
 
 ### 3. Run setup
 
-Now run the setup script — it will use your env vars to configure rclone,
-wandb, HuggingFace, and accelerate:
+The setup script uses [uv](https://docs.astral.sh/uv/) to install Python 3.12
+(required by sigil-watermark) regardless of the system Python version.
+It also configures rclone, wandb, HuggingFace, and accelerate using your env vars.
 
 ```bash
 bash scripts/setup_runpod.sh
+source $HOME/.local/bin/env   # add uv to PATH
 source .venv/bin/activate
+python --version              # should show 3.12+
 ```
 
 Verify rclone is configured:
@@ -114,7 +117,20 @@ no_check_bucket = true
 EOF
 ```
 
-### 4. Pull datasets from R2
+### 4. Start a tmux session on the pod
+
+Always run experiments inside tmux **on the pod** so they survive SSH disconnects:
+
+```bash
+tmux new -s exp
+source $HOME/.local/bin/env
+source .venv/bin/activate
+set -a && source /workspace/.env && set +a
+```
+
+Detach anytime with `Ctrl+B, D`. Reattach with `tmux attach -t exp`.
+
+### 5. Pull datasets from R2
 
 ```bash
 rclone sync r2:sigil-experiments/datasets/ data/ --progress
@@ -251,6 +267,7 @@ On a new or restarted pod:
 
 ```bash
 cd /workspace/sigil-experiments
+source $HOME/.local/bin/env    # uv PATH
 source .venv/bin/activate
 set -a && source /workspace/.env && set +a
 

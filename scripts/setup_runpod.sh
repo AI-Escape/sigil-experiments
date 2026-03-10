@@ -10,7 +10,7 @@ echo "=== Sigil Experiments: RunPod Setup ==="
 
 # 1. System deps
 echo "Installing system dependencies..."
-apt-get update -qq && apt-get install -y -qq rclone git-lfs > /dev/null 2>&1
+apt-get update -qq && apt-get install -y -qq rclone git-lfs tmux > /dev/null 2>&1
 echo "  Done."
 
 # 2. Clone repo (if not already present)
@@ -24,20 +24,18 @@ else
 fi
 cd "$REPO_DIR"
 
-# 3. Python environment (requires 3.12+ for sigil-watermark)
-echo "Setting up Python environment..."
-PYTHON_BIN="python3"
-if command -v python3.12 &> /dev/null; then
-    PYTHON_BIN="python3.12"
-elif command -v python3.13 &> /dev/null; then
-    PYTHON_BIN="python3.13"
-fi
-echo "  Using $($PYTHON_BIN --version)"
-$PYTHON_BIN -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip setuptools wheel > /dev/null 2>&1
-pip install -e ".[dev]" > /dev/null 2>&1
+# 3. Install uv and set up Python 3.12+ environment
+echo "Installing uv..."
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
 echo "  Done."
+
+echo "Setting up Python 3.12 environment..."
+rm -rf .venv
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+echo "  Python $(python --version) environment ready."
 
 # 4. Load secrets
 if [ -f /workspace/.env ]; then
