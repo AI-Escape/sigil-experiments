@@ -13,8 +13,8 @@ watermarked_ratio: 1.0
 
 # Training
 resolution: 512
-train_batch_size: 1
-gradient_accumulation_steps: 4
+train_batch_size: 4
+gradient_accumulation_steps: 1
 learning_rate: 1e-6
 lr_scheduler: constant
 lr_warmup_steps: 0
@@ -24,7 +24,7 @@ seed: 42
 
 # Optimization
 mixed_precision: bf16
-gradient_checkpointing: true
+gradient_checkpointing: false
 use_xformers: true
 
 # Logging
