@@ -187,8 +187,12 @@ def train(config: dict, seed_override: int | None = None):
     max_steps = config["max_train_steps"]
     checkpointing_steps = config["checkpointing_steps"]
 
+    trainable_params = sum(p.numel() for p in unet.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in unet.parameters())
     print(f"\nStarting training: {phase}/{condition} seed={seed}")
+    print(f"  Trainable params: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
     print(f"  Dataset: {len(dataset)} images")
+    print(f"  Learning rate: {float(config['learning_rate'])}")
     print(f"  Max steps: {max_steps}, checkpoint every {checkpointing_steps}")
     print(f"  Effective batch size: {config['train_batch_size'] * config['gradient_accumulation_steps']}")
 
