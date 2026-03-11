@@ -281,11 +281,18 @@ def train(config: dict, seed_override: int | None = None):
 
                             progress.console.print(f"  [green]Checkpoint saved: step {global_step}[/green]")
 
-                            # Sync to R2 (non-blocking, best-effort)
+                            # Sync to R2 then clean up old local checkpoints (keep last 2)
                             try:
                                 push_checkpoint(phase, condition, seed, global_step)
                             except Exception as e:
                                 progress.console.print(f"  [yellow]R2 sync failed (continuing): {e}[/yellow]")
+
+                            # Remove old checkpoints to save disk space (keep last 2)
+                            import shutil
+                            all_ckpts = sorted(Path(output_dir).glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+                            for old_ckpt in all_ckpts[:-2]:
+                                shutil.rmtree(old_ckpt, ignore_errors=True)
+                                progress.console.print(f"  [dim]Cleaned up {old_ckpt.name}[/dim]")
 
                     if global_step >= max_steps:
                         break

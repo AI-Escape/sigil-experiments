@@ -567,6 +567,7 @@ def create_pod(
         else:
             create_kwargs["image_name"] = docker_image
             create_kwargs["ports"] = "22/tcp"
+            create_kwargs["volume_mount_path"] = "/workspace"
 
         pod = runpod.create_pod(**create_kwargs)
 
