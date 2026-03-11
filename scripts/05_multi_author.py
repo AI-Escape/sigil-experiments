@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import sys
@@ -49,17 +50,40 @@ def load_multi_artist_keys(artists: list[str]) -> dict:
     return keys
 
 
+def _detect_cross_single(args):
+    """Worker: detect one image with one artist's key."""
+    img_path, public_key, artist_name, prompt_artist = args
+    detector = SigilDetector()
+    img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+    result = detector.detect(img, public_key)
+    return {
+        "image": Path(img_path).name,
+        "prompt_artist": prompt_artist or "generic",
+        "detection_key": artist_name,
+        "detected": result.detected,
+        "confidence": result.confidence,
+        "ghost_confidence": result.ghost_confidence,
+        "ghost_hash_match": result.ghost_hash_match,
+        "author_id_match": result.author_id_match,
+    }
+
+
 def detect_with_all_keys(
     image_dir: Path,
     artist_keys: dict,
     prompt_artist: str | None = None,
+    max_workers: int = 8,
 ) -> pd.DataFrame:
     """Detect with every artist's key and produce a cross-detection matrix."""
-    detector = SigilDetector()
-    rows = []
-
     images = sorted(image_dir.rglob("*.png"))
-    n_artists = len(artist_keys)
+
+    # Build work list: every image × every artist key
+    work_args = []
+    for img_path in images:
+        for artist_name, keys in artist_keys.items():
+            work_args.append((str(img_path), keys.public_key, artist_name, prompt_artist))
+
+    rows = []
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
@@ -72,23 +96,11 @@ def detect_with_all_keys(
     ) as progress:
         cross_task = progress.add_task(
             f"Cross-author detection ({prompt_artist or 'generic'})",
-            total=len(images) * n_artists,
+            total=len(work_args),
         )
-        for img_path in images:
-            img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-
-            for artist_name, keys in artist_keys.items():
-                result = detector.detect(img, keys.public_key)
-                rows.append({
-                    "image": img_path.name,
-                    "prompt_artist": prompt_artist or "generic",
-                    "detection_key": artist_name,
-                    "detected": result.detected,
-                    "confidence": result.confidence,
-                    "ghost_confidence": result.ghost_confidence,
-                    "ghost_hash_match": result.ghost_hash_match,
-                    "author_id_match": result.author_id_match,
-                })
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_detect_cross_single, work_args, chunksize=4):
+                rows.append(result)
                 progress.advance(cross_task)
 
     return pd.DataFrame(rows)

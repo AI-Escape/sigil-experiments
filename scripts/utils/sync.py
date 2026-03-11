@@ -119,7 +119,7 @@ def push_generated(phase: str, condition: str, seed: int, step: int | None = Non
     sync_to_r2(local, remote)
 
 
-def push_detections(csv_path: str):
-    """Push a detection CSV to R2."""
+def push_detections(csv_path: str, background: bool = True):
+    """Push a detection CSV to R2. Runs in background by default."""
     name = Path(csv_path).name
-    sync_to_r2(csv_path, f"detections/{name}")
+    sync_to_r2(csv_path, f"detections/{name}", background=background)

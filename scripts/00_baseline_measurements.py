@@ -152,7 +152,7 @@ def phase_0c(keys, artist_name: str, output_dir: Path):
     # Generate across all 4 categories
     all_rows = []
     gen_seed = 77
-    generator = torch.Generator("cuda").manual_seed(gen_seed)
+    batch_size = 8
 
     total_prompts = 0
     cats_prompts = {}
@@ -178,19 +178,30 @@ def phase_0c(keys, artist_name: str, output_dir: Path):
             cat_dir = gen_dir / f"cat_{cat}"
             cat_dir.mkdir(parents=True, exist_ok=True)
 
-            for idx, prompt in enumerate(prompts):
-                out = pipe(prompt, generator=generator, num_inference_steps=50, guidance_scale=7.5)
-                img = out.images[0]
-                fname = f"{idx+1:04d}_s{gen_seed}.png"
-                img.save(cat_dir / fname)
-                all_rows.append({
-                    "image": f"cat_{cat}/{fname}",
-                    "prompt_category": cat,
-                    "prompt_idx": idx + 1,
-                    "gen_seed": gen_seed,
-                    "prompt": prompt,
-                })
-                progress.advance(task)
+            for batch_start in range(0, len(prompts), batch_size):
+                batch_prompts = prompts[batch_start:batch_start + batch_size]
+                batch_len = len(batch_prompts)
+                generators = [
+                    torch.Generator("cuda").manual_seed(gen_seed + batch_start + i)
+                    for i in range(batch_len)
+                ]
+                images = pipe(
+                    batch_prompts, generator=generators,
+                    num_inference_steps=50, guidance_scale=7.5,
+                ).images
+
+                for i, img in enumerate(images):
+                    idx = batch_start + i
+                    fname = f"{idx+1:04d}_s{gen_seed}.png"
+                    img.save(cat_dir / fname)
+                    all_rows.append({
+                        "image": f"cat_{cat}/{fname}",
+                        "prompt_category": cat,
+                        "prompt_idx": idx + 1,
+                        "gen_seed": gen_seed,
+                        "prompt": batch_prompts[i],
+                    })
+                progress.advance(task, batch_len)
 
     del pipe
     torch.cuda.empty_cache()

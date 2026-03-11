@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import io
 import json
 import subprocess
@@ -37,19 +38,36 @@ from utils.sync import sync_to_r2
 
 # === 4A: Ghost layer isolation ===
 
-def phase_4a(input_dir: str):
+def _detect_4a_single(args):
+    """Worker: detect one image and return per-layer confidences."""
+    img_path, public_key, cat = args
+    detector = SigilDetector()
+    img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
+    result = detector.detect(img, public_key)
+    return {
+        "image": Path(img_path).name,
+        "prompt_category": cat,
+        "ghost_confidence": result.ghost_confidence,
+        "ring_confidence": result.ring_confidence,
+        "payload_confidence": result.payload_confidence,
+        "detected": result.detected,
+    }
+
+
+def phase_4a(input_dir: str, max_workers: int = 8):
     """Analyze Phase 1 generated images by detection layer."""
     print("\n=== Phase 4A: Ghost Layer Isolation ===")
     keys = get_artist_keys()
-    detector = SigilDetector()
 
     input_path = Path(input_dir)
+
+    work_args = []
+    for cat_dir in sorted(input_path.glob("cat_*")):
+        cat = cat_dir.name.split("_")[1]
+        for img_path in sorted(cat_dir.glob("*.png")):
+            work_args.append((str(img_path), keys.public_key, cat))
+
     rows = []
-
-    all_images = [(cat_dir, img_path)
-                  for cat_dir in sorted(input_path.glob("cat_*"))
-                  for img_path in sorted(cat_dir.glob("*.png"))]
-
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
@@ -60,20 +78,11 @@ def phase_4a(input_dir: str):
         TextColumn("•"),
         TimeRemainingColumn(),
     ) as progress:
-        detect_task = progress.add_task("Phase 4A: detecting images", total=len(all_images))
-        for cat_dir, img_path in all_images:
-            cat = cat_dir.name.split("_")[1]
-            img = np.array(Image.open(img_path).convert("RGB"), dtype=np.float64)
-            result = detector.detect(img, keys.public_key)
-            rows.append({
-                "image": img_path.name,
-                "prompt_category": cat,
-                "ghost_confidence": result.ghost_confidence,
-                "ring_confidence": result.ring_confidence,
-                "payload_confidence": result.payload_confidence,
-                "detected": result.detected,
-            })
-            progress.advance(detect_task)
+        detect_task = progress.add_task("Phase 4A: detecting images", total=len(work_args))
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_detect_4a_single, work_args, chunksize=4):
+                rows.append(result)
+                progress.advance(detect_task)
 
     df = pd.DataFrame(rows)
     csv_path = "results/detections/phase4a-ghost_isolation.csv"
@@ -170,16 +179,45 @@ def apply_attack(img: Image.Image, attack_type: str, param) -> Image.Image:
     return img
 
 
-def phase_4c(input_dir: str):
+def _attack_detect_single(args):
+    """Worker: apply attack to image and detect."""
+    img_path, public_key, attack_name, attack_type, attack_param = args
+    detector = SigilDetector()
+    cat = Path(img_path).parent.name.split("_")[1]
+    img = Image.open(img_path).convert("RGB")
+    attacked = apply_attack(img, attack_type, attack_param)
+    arr = np.array(attacked, dtype=np.float64)
+    result = detector.detect(arr, public_key)
+    return {
+        "image": Path(img_path).name,
+        "prompt_category": cat,
+        "attack_type": attack_type,
+        "attack_param": str(attack_param),
+        "attack_name": attack_name,
+        "detected": result.detected,
+        "confidence": result.confidence,
+        "ghost_confidence": result.ghost_confidence,
+    }
+
+
+def phase_4c(input_dir: str, max_workers: int = 8):
     """Run post-generation attacks and measure detection survival."""
     print("\n=== Phase 4C: Post-generation Attack Resilience ===")
     keys = get_artist_keys()
-    detector = SigilDetector()
     input_path = Path(input_dir)
 
     all_images_4c = [img_path
                      for cat_dir in sorted(input_path.glob("cat_*"))
                      for img_path in sorted(cat_dir.glob("*.png"))]
+
+    # Build full work list: every image × every attack
+    work_args = []
+    for attack_name, attack_info in ATTACKS.items():
+        for img_path in all_images_4c:
+            work_args.append((
+                str(img_path), keys.public_key,
+                attack_name, attack_info["type"], attack_info["param"],
+            ))
 
     rows = []
     with Progress(
@@ -192,30 +230,14 @@ def phase_4c(input_dir: str):
         TextColumn("•"),
         TimeRemainingColumn(),
     ) as progress:
-        attack_task = progress.add_task("Phase 4C: attack conditions", total=len(ATTACKS))
-        for attack_name, attack_info in ATTACKS.items():
-            progress.update(attack_task, description=f"Phase 4C: attack {attack_name}")
-            img_task = progress.add_task(f"  Images for {attack_name}", total=len(all_images_4c))
-            for img_path in all_images_4c:
-                cat = img_path.parent.name.split("_")[1]
-                img = Image.open(img_path).convert("RGB")
-                attacked = apply_attack(img, attack_info["type"], attack_info["param"])
-
-                arr = np.array(attacked, dtype=np.float64)
-                result = detector.detect(arr, keys.public_key)
-
-                rows.append({
-                    "image": img_path.name,
-                    "prompt_category": cat,
-                    "attack_type": attack_info["type"],
-                    "attack_param": str(attack_info["param"]),
-                    "attack_name": attack_name,
-                    "detected": result.detected,
-                    "confidence": result.confidence,
-                    "ghost_confidence": result.ghost_confidence,
-                })
-                progress.advance(img_task)
-            progress.advance(attack_task)
+        task = progress.add_task(
+            f"Phase 4C: attacks ({len(ATTACKS)} attacks × {len(all_images_4c)} images)",
+            total=len(work_args),
+        )
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_attack_detect_single, work_args, chunksize=4):
+                rows.append(result)
+                progress.advance(task)
 
     df = pd.DataFrame(rows)
     csv_path = "results/detections/phase4c-post_attack.csv"
@@ -262,8 +284,8 @@ def phase_4d(artist_name: str, seed: int = 42):
                 "vae_model_name_or_path": "stabilityai/sd-vae-ft-mse",
                 "train_data_dir": "data/artist_wm",
                 "resolution": 512,
-                "train_batch_size": 1,
-                "gradient_accumulation_steps": 4,
+                "train_batch_size": 4,
+                "gradient_accumulation_steps": 1,
                 "learning_rate": lr,
                 "lr_scheduler": "constant",
                 "lr_warmup_steps": 0,
@@ -271,7 +293,7 @@ def phase_4d(artist_name: str, seed: int = 42):
                 "checkpointing_steps": steps,  # Only save final
                 "seed": seed,
                 "mixed_precision": "bf16",
-                "gradient_checkpointing": True,
+                "gradient_checkpointing": False,
                 "use_xformers": True,
                 "report_to": "wandb",
                 "wandb_project": "sigil-training-survival",
@@ -328,8 +350,8 @@ def phase_4e(artist_name: str, seed: int = 42):
             "vae_model_name_or_path": "stabilityai/sd-vae-ft-mse",
             "train_data_dir": "data/artist_wm_blip",
             "resolution": 512,
-            "train_batch_size": 1,
-            "gradient_accumulation_steps": 4,
+            "train_batch_size": 4,
+            "gradient_accumulation_steps": 1,
             "learning_rate": 1e-6,
             "lr_scheduler": "constant",
             "lr_warmup_steps": 0,
@@ -337,7 +359,7 @@ def phase_4e(artist_name: str, seed: int = 42):
             "checkpointing_steps": 500,
             "seed": seed,
             "mixed_precision": "bf16",
-            "gradient_checkpointing": True,
+            "gradient_checkpointing": False,
             "use_xformers": True,
             "report_to": "wandb",
             "wandb_project": "sigil-training-survival",

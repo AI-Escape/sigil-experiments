@@ -25,7 +25,7 @@ from sigil_watermark import SigilDetector, DEFAULT_CONFIG
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.config import get_artist_keys, load_config, load_env
 from utils.metrics import aggregate_by_category, aggregate_detections
-from utils.sync import push_detections
+from utils.sync import push_detections, wait_bg_syncs
 
 
 def _detect_single(args):
@@ -150,7 +150,7 @@ def main():
         )
 
         results_root = Path(f"results/{config['phase']}/{config['condition']}-seed{config['seed']}")
-        step_dirs = sorted(results_root.glob("step-*"))
+        step_dirs = sorted(results_root.glob("step-*"), key=lambda p: int(p.name.split("-")[1]))
 
         all_step_metrics = []
 
