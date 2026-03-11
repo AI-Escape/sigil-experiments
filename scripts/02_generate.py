@@ -26,6 +26,9 @@ from utils.config import load_config, load_env, load_prompts, replace_artist_nam
 from utils.sync import pull_checkpoint, list_remote_checkpoints, push_generated
 
 
+BATCH_SIZE = 8  # A100 can comfortably do 8 x 512px in fp16
+
+
 def generate_from_checkpoint(
     checkpoint_path: str,
     output_dir: str,
@@ -34,6 +37,7 @@ def generate_from_checkpoint(
     guidance_scale: float = 7.5,
     num_inference_steps: int = 50,
     log_to_wandb: bool = True,
+    batch_size: int = BATCH_SIZE,
 ):
     """Generate images from a checkpoint across all prompt categories."""
     out = Path(output_dir)
@@ -61,7 +65,6 @@ def generate_from_checkpoint(
         ).to("cuda")
     pipe.set_progress_bar_config(disable=True)
 
-    generator = torch.Generator("cuda").manual_seed(gen_seed)
     all_metadata = []
     sample_images = []
 
@@ -91,33 +94,46 @@ def generate_from_checkpoint(
             cat_dir = out / f"cat_{cat}"
             cat_dir.mkdir(parents=True, exist_ok=True)
 
-            for idx, prompt in enumerate(prompts):
+            # Process in batches
+            for batch_start in range(0, len(prompts), batch_size):
+                batch_prompts = prompts[batch_start:batch_start + batch_size]
+                batch_len = len(batch_prompts)
                 progress.update(task, description=f"Generating images [cat {cat.upper()}]")
-                image = pipe(
-                    prompt,
-                    generator=generator,
+
+                # Each batch gets a fresh generator from a deterministic seed
+                # so results are reproducible regardless of batch size
+                generators = [
+                    torch.Generator("cuda").manual_seed(gen_seed + batch_start + i)
+                    for i in range(batch_len)
+                ]
+
+                images = pipe(
+                    batch_prompts,
+                    generator=generators,
                     num_inference_steps=num_inference_steps,
                     guidance_scale=guidance_scale,
-                ).images[0]
+                ).images
 
-                fname = f"{idx+1:04d}_s{gen_seed}.png"
-                image.save(cat_dir / fname)
+                for i, image in enumerate(images):
+                    idx = batch_start + i
+                    fname = f"{idx+1:04d}_s{gen_seed}.png"
+                    image.save(cat_dir / fname)
 
-                all_metadata.append({
-                    "file_name": f"cat_{cat}/{fname}",
-                    "prompt_category": cat,
-                    "prompt_idx": idx + 1,
-                    "gen_seed": gen_seed,
-                    "prompt": prompt,
-                    "guidance_scale": guidance_scale,
-                    "num_inference_steps": num_inference_steps,
-                })
+                    all_metadata.append({
+                        "file_name": f"cat_{cat}/{fname}",
+                        "prompt_category": cat,
+                        "prompt_idx": idx + 1,
+                        "gen_seed": gen_seed,
+                        "prompt": batch_prompts[i],
+                        "guidance_scale": guidance_scale,
+                        "num_inference_steps": num_inference_steps,
+                    })
 
-                # Collect samples for wandb (first 4 per category)
-                if idx < 4 and log_to_wandb:
-                    sample_images.append(wandb.Image(image, caption=f"[{cat.upper()}] {prompt}"))
+                    # Collect samples for wandb (first 4 per category)
+                    if idx < 4 and log_to_wandb:
+                        sample_images.append(wandb.Image(image, caption=f"[{cat.upper()}] {batch_prompts[i]}"))
 
-                progress.advance(task)
+                progress.advance(task, batch_len)
 
     # Save metadata
     with open(out / "generation_metadata.jsonl", "w") as f:
