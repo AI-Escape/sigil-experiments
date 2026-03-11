@@ -252,8 +252,7 @@ def train(config: dict, seed_override: int | None = None):
                     last_loss = loss.detach().item()
                     progress.update(task, completed=global_step, loss=last_loss)
 
-                    if global_step % 100 == 0:
-                        accelerator.log({"train_loss": last_loss, "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
+                    accelerator.log({"train_loss": last_loss, "lr": lr_scheduler.get_last_lr()[0]}, step=global_step)
 
                     if global_step % checkpointing_steps == 0:
                         if accelerator.is_main_process:
