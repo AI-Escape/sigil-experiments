@@ -83,6 +83,34 @@ def push_checkpoint(phase: str, condition: str, seed: int, step: int, background
     sync_to_r2(local, remote, background=background)
 
 
+def pull_checkpoint(phase: str, condition: str, seed: int, step: int) -> Path:
+    """Pull a checkpoint from R2 if not already local. Returns local path."""
+    local = Path(f"checkpoints/{phase}/{condition}-seed{seed}/checkpoint-{step}")
+    remote = f"checkpoints/{phase}/{condition}-seed{seed}/checkpoint-{step}"
+    if local.exists() and any(local.iterdir()):
+        return local
+    sync_from_r2(remote, str(local))
+    return local
+
+
+def list_remote_checkpoints(phase: str, condition: str, seed: int) -> list[int]:
+    """List checkpoint steps available on R2."""
+    remote = f"r2:sigil-experiments/checkpoints/{phase}/{condition}-seed{seed}/"
+    result = subprocess.run(
+        ["rclone", "lsf", remote, "--dirs-only"],
+        capture_output=True, text=True,
+    )
+    steps = []
+    for line in result.stdout.strip().splitlines():
+        name = line.strip("/")
+        if name.startswith("checkpoint-"):
+            try:
+                steps.append(int(name.split("-")[1]))
+            except ValueError:
+                pass
+    return sorted(steps)
+
+
 def push_generated(phase: str, condition: str, seed: int, step: int | None = None):
     """Push generated images to R2."""
     suffix = f"/step-{step:04d}" if step else ""

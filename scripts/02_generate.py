@@ -23,7 +23,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeEl
 
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.config import load_config, load_env, load_prompts, replace_artist_name
-from utils.sync import push_generated
+from utils.sync import pull_checkpoint, list_remote_checkpoints, push_generated
 
 
 def generate_from_checkpoint(
@@ -163,8 +163,26 @@ def main():
             config=config,
         )
 
+        phase = config["phase"]
+        condition = config["condition"]
+        seed = config["seed"]
         ckpt_root = Path(config["output_dir"])
-        checkpoints = sorted(ckpt_root.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+
+        # Discover checkpoints: local + R2
+        local_steps = set()
+        for p in ckpt_root.glob("checkpoint-*"):
+            try:
+                local_steps.add(int(p.name.split("-")[1]))
+            except ValueError:
+                pass
+        remote_steps = list_remote_checkpoints(phase, condition, seed)
+        all_steps = sorted(local_steps | set(remote_steps))
+
+        if not all_steps:
+            print("No checkpoints found locally or on R2.")
+            sys.exit(1)
+
+        print(f"Found {len(all_steps)} checkpoints ({len(local_steps)} local, {len(remote_steps)} on R2)")
 
         with Progress(
             SpinnerColumn(),
@@ -176,20 +194,39 @@ def main():
             TextColumn("•"),
             TimeRemainingColumn(),
         ) as progress:
-            task = progress.add_task("Processing checkpoints", total=len(checkpoints))
+            task = progress.add_task("Processing checkpoints", total=len(all_steps))
 
-            for ckpt in checkpoints:
-                step = int(ckpt.name.split("-")[1])
+            for step in all_steps:
                 progress.update(task, description=f"Processing checkpoints [step {step}]")
-                out_dir = f"results/{config['phase']}/{config['condition']}-seed{config['seed']}/step-{step:04d}"
+                out_dir = f"results/{phase}/{condition}-seed{seed}/step-{step:04d}"
+
+                # Skip if already generated
+                out_path = Path(out_dir)
+                if out_path.exists() and any(out_path.rglob("*.png")):
+                    progress.console.print(f"  [dim]Skipping step {step} (already generated)[/dim]")
+                    progress.advance(task)
+                    continue
+
+                # Pull from R2 if not local
+                was_pulled = step not in local_steps
+                ckpt_path = pull_checkpoint(phase, condition, seed, step)
+
                 generate_from_checkpoint(
-                    str(ckpt), out_dir, args.artist_name,
+                    str(ckpt_path), out_dir, args.artist_name,
                     gen_seed=args.gen_seed,
                     guidance_scale=args.guidance_scale,
                     num_inference_steps=args.num_inference_steps,
                 )
+
                 if args.sync:
-                    push_generated(config["phase"], config["condition"], config["seed"], step)
+                    push_generated(phase, condition, seed, step)
+
+                # Clean up pulled checkpoints to save disk
+                if was_pulled and ckpt_path.exists():
+                    import shutil
+                    shutil.rmtree(ckpt_path, ignore_errors=True)
+                    progress.console.print(f"  [dim]Cleaned up pulled checkpoint {step}[/dim]")
+
                 progress.advance(task)
 
         wandb.finish()
