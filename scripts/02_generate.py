@@ -17,7 +17,7 @@ from pathlib import Path
 
 import torch
 import wandb
-from diffusers import StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline, UNet2DConditionModel
 from PIL import Image
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn, MofNCompleteColumn
 
@@ -39,13 +39,26 @@ def generate_from_checkpoint(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Load pipeline
+    # Load pipeline: base model + fine-tuned UNet
     print(f"Loading checkpoint: {checkpoint_path}")
-    pipe = StableDiffusionPipeline.from_pretrained(
-        checkpoint_path,
-        torch_dtype=torch.float16,
-        safety_checker=None,
-    ).to("cuda")
+    ckpt_path = Path(checkpoint_path)
+    unet_path = ckpt_path / "unet"
+    if unet_path.exists():
+        # UNet-only checkpoint — load base model and swap in fine-tuned UNet
+        unet = UNet2DConditionModel.from_pretrained(unet_path, torch_dtype=torch.float16)
+        pipe = StableDiffusionPipeline.from_pretrained(
+            "stable-diffusion-v1-5/stable-diffusion-v1-5",
+            unet=unet,
+            torch_dtype=torch.float16,
+            safety_checker=None,
+        ).to("cuda")
+    else:
+        # Legacy full-pipeline checkpoint
+        pipe = StableDiffusionPipeline.from_pretrained(
+            checkpoint_path,
+            torch_dtype=torch.float16,
+            safety_checker=None,
+        ).to("cuda")
     pipe.set_progress_bar_config(disable=True)
 
     generator = torch.Generator("cuda").manual_seed(gen_seed)

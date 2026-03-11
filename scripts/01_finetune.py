@@ -36,7 +36,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.config import get_artist_keys, load_config, load_env
-from utils.sync import push_checkpoint, push_generated
+from utils.sync import push_checkpoint, push_generated, wait_bg_syncs
 
 
 class TextImageDataset(Dataset):
@@ -260,15 +260,8 @@ def train(config: dict, seed_override: int | None = None):
                             save_dir = Path(output_dir) / f"checkpoint-{global_step}"
                             save_dir.mkdir(parents=True, exist_ok=True)
 
-                            # Save pipeline
-                            pipeline = StableDiffusionPipeline.from_pretrained(
-                                config["pretrained_model_name_or_path"],
-                                unet=accelerator.unwrap_model(unet),
-                                vae=vae,
-                                text_encoder=text_encoder,
-                                tokenizer=tokenizer,
-                            )
-                            pipeline.save_pretrained(str(save_dir))
+                            # Save only UNet (everything else is frozen/unchanged)
+                            accelerator.unwrap_model(unet).save_pretrained(save_dir / "unet")
 
                             # Save training state
                             state = {
@@ -286,6 +279,9 @@ def train(config: dict, seed_override: int | None = None):
                                 push_checkpoint(phase, condition, seed, global_step)
                             except Exception as e:
                                 progress.console.print(f"  [yellow]R2 sync failed (continuing): {e}[/yellow]")
+
+                            # Wait for any prior background syncs before deleting old checkpoints
+                            wait_bg_syncs()
 
                             # Remove old checkpoints to save disk space (keep last 2)
                             import shutil
